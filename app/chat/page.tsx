@@ -1,64 +1,145 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { useEffect, useRef, useState } from "react";
+import { PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ChatInput } from "@/components/chat/chat-input";
+import { MessageList } from "@/components/chat/message-list";
+import { Sidebar } from "@/components/chat/sidebar";
+import type { LocalSession } from "@/types/chat";
+
+const STORAGE_KEY = "ai-workspace:chat-sessions";
+
+function loadSessions(): LocalSession[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as LocalSession[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function ChatPage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } =
-    useChat();
+  const { messages, sendMessage, status, error, setMessages } = useChat();
+  const [sessions, setSessions] = useState<LocalSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const lastSyncedKeyRef = useRef("");
+
+  const isLoading = status === "submitted" || status === "streaming";
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
+
+  // 首次渲染后从 localStorage 恢复会话（只在客户端执行，避免 hydration 首屏不一致）
+  useEffect(() => {
+    setSessions(loadSessions());
+  }, []);
+
+  // 会话列表变更时持久化到 localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    } catch {
+      // 忽略存储配额等异常
+    }
+  }, [sessions]);
+
+  // 流式输出期间消息持续变化，用内容签名判断真正变化后才写回会话，防止循环更新
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const last = messages[messages.length - 1];
+    const signature = `${messages.length}:${last?.id ?? ""}:${last?.parts?.length ?? 0}`;
+    if (signature === lastSyncedKeyRef.current) return;
+    lastSyncedKeyRef.current = signature;
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === activeSessionId
+          ? { ...s, messages, updatedAt: Date.now() }
+          : s
+      )
+    );
+  }, [messages, activeSessionId]);
+
+  const handleSend = (text: string) => {
+    const content = text.trim();
+    if (!content || isLoading) return;
+    if (!activeSessionId) {
+      const session: LocalSession = {
+        id: crypto.randomUUID(),
+        title: content.length > 30 ? `${content.slice(0, 30)}…` : content,
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      setSessions((prev) => [session, ...prev]);
+      setActiveSessionId(session.id);
+    }
+    sendMessage({ text: content });
+  };
+
+  const handleNewChat = () => {
+    setActiveSessionId(null);
+    setMessages([]);
+    setSidebarOpen(false);
+  };
+
+  const handleSelectSession = (id: string) => {
+    const session = sessions.find((s) => s.id === id);
+    if (!session) return;
+    setActiveSessionId(id);
+    setMessages(session.messages);
+    setSidebarOpen(false);
+  };
+
+  const handleDeleteSession = (id: string) => {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+    if (activeSessionId === id) {
+      setActiveSessionId(null);
+      setMessages([]);
+    }
+  };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* 消息区域 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            <div className="text-center">
-              <h2 className="text-2xl font-semibold mb-2">AI Workspace</h2>
-              <p>开始一段新的对话</p>
-            </div>
-          </div>
-        )}
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${
-              message.role === "user" ? "justify-end" : "justify-start"
-            }`}
-          >
-            <div
-              className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                message.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted"
-              }`}
-            >
-              <div className="whitespace-pre-wrap">{message.content}</div>
-            </div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-muted rounded-lg px-4 py-2">
-              <div className="animate-pulse">思考中...</div>
-            </div>
-          </div>
-        )}
-      </div>
+    <div className="flex h-dvh overflow-hidden">
+      {/* 左侧边栏 */}
+      <Sidebar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onNewChat={handleNewChat}
+        onSelectSession={handleSelectSession}
+        onDeleteSession={handleDeleteSession}
+      />
 
-      {/* 输入区域 */}
-      <div className="border-t p-4">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            value={input}
-            onChange={handleInputChange}
-            placeholder="输入消息..."
-            className="flex-1 rounded-lg border bg-background px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
-          <Button type="submit" disabled={isLoading}>
-            发送
+      {/* 右侧主区 */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* 移动端顶部栏 */}
+        <header className="flex items-center gap-2 border-b px-3 py-2 lg:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="打开侧边栏"
+          >
+            <PanelLeft />
           </Button>
-        </form>
+          <h1 className="truncate text-sm font-medium">
+            {activeSession?.title ?? "新对话"}
+          </h1>
+        </header>
+
+        {/* 消息区 + 底部输入框 */}
+        <main className="flex min-h-0 flex-1 flex-col">
+          <MessageList
+            messages={messages}
+            isLoading={isLoading}
+            error={error}
+            onSend={handleSend}
+          />
+          <ChatInput disabled={isLoading} onSend={handleSend} />
+        </main>
       </div>
     </div>
   );
