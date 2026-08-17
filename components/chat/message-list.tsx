@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { UIMessage } from "ai";
+import { isTextUIPart, type UIMessage } from "ai";
+import { Markdown } from "./markdown";
 
 const SUGGESTIONS = [
   "用通俗的语言解释 RAG 检索增强生成",
@@ -18,12 +19,14 @@ interface MessageListProps {
 }
 
 function messageText(message: UIMessage): string {
+  // ai@6 的 UIMessage 以 parts 为准，用类型守卫收窄出文本部分
   const partsText =
     message.parts
-      ?.filter((part) => part.type === "text")
-      .map((part) => part.text ?? "")
+      ?.filter(isTextUIPart)
+      .map((part) => part.text)
       .join("") ?? "";
-  return message.content || partsText;
+  // 兜底兼容仅存 content 的旧会话数据（ai@6 类型未声明 content，但运行时的历史数据里可能存在）
+  return partsText || (message as { content?: string }).content || "";
 }
 
 export function MessageList({
@@ -79,8 +82,8 @@ export function MessageList({
             </div>
           ) : (
             <div key={message.id} className="flex justify-start">
-              <div className="w-full whitespace-pre-wrap text-[15px] leading-relaxed">
-                {messageText(message)}
+              <div className="w-full text-[15px] leading-relaxed">
+                <Markdown content={messageText(message)} />
               </div>
             </div>
           )

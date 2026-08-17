@@ -1,9 +1,0 @@
-- generic [active] [ref=e1]:
-  - generic [ref=e2]:
-    - generic [ref=e5]:
-      - heading "AI Workspace" [level=2] [ref=e6]
-      - paragraph [ref=e7]: 开始一段新的对话
-    - generic [ref=e9]:
-      - textbox "输入消息..." [ref=e10]
-      - button "发送" [ref=e11]
-  - button "Open Next.js Dev Tools" [ref=e17] [cursor=pointer]

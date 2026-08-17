@@ -42,3 +42,8 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# playwright 调试产物 / 临时验证文件
+/.playwright-cli/
+/.playwright-mcp/
+/.tmp-*
