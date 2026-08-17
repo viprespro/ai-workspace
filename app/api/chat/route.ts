@@ -1,5 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import { streamText, type ModelMessage } from "ai";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 30;
@@ -13,15 +13,15 @@ const deepseek = createOpenAI({
 // 将 v6 UI 消息（{ role, parts }）转换为 streamText 所需的 ModelMessage（{ role, content }）
 function toModelMessages(
   messages: Array<{ role: string; content?: string; parts?: Array<{ type: string; text?: string }> }>
-) {
+): ModelMessage[] {
   return messages.map((message) => ({
-    role: message.role,
+    role: message.role as ModelMessage["role"],
     content:
       message.parts
         ?.filter((part) => part.type === "text")
         .map((part) => part.text ?? "")
         .join("") ?? message.content ?? "",
-  }));
+  })) as ModelMessage[]; // 无工具调用场景，不会出现 content 需为数组的 tool 消息
 }
 
 export async function POST(req: Request) {
