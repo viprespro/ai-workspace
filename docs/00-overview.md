@@ -55,7 +55,7 @@ ai-workspace/
 ├── public/                 # 静态资源
 ├── Dockerfile
 ├── docker-compose.yml
-└── prd.md                  # 产品需求文档
+└── ai-workspace-prd.md                  # 产品需求文档
 ```
 
 ## 入口点

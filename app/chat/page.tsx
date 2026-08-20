@@ -122,6 +122,7 @@ export default function ChatPage() {
     setSidebarOpen(false);
   };
 
+  
   const handleDeleteSession = (id: string) => {
     updateSessions((prev) => prev.filter((s) => s.id !== id));
     if (activeSessionId === id) {
